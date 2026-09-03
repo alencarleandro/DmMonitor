@@ -72,12 +72,16 @@ func TestConfigRejectsUnsafeProduction(t *testing.T) {
 
 func TestRoutesAndAnonymousAccess(t *testing.T) {
 	app, err := New(context.Background(), nil, Config{PublicURL: "http://127.0.0.1:5175", Environment: "development", StaticDir: t.TempDir()})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	handler := app.Handler()
 	for path, status := range map[string]int{"/api/me": 401, "/api/measurements": 401, "/api/missing": 404, "/auth/google": 503, "/auth/missing": 404, "/missing.js": 404} {
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
-		if w.Code != status { t.Fatalf("GET %s = %d, want %d", path, w.Code, status) }
+		if w.Code != status {
+			t.Fatalf("GET %s = %d, want %d", path, w.Code, status)
+		}
 	}
 }
 

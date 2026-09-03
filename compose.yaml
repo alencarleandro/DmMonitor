@@ -20,7 +20,7 @@ services:
     ports:
       - "127.0.0.1:8087:8087"
     environment:
-      APP_ENV: ${APP_ENV:-development}
+      DMMONITOR_ENV: ${DMMONITOR_ENV:-development}
       PUBLIC_URL: ${DOCKER_PUBLIC_URL:-http://127.0.0.1:8087}
       DATABASE_URL: postgres://dmmonitor:${POSTGRES_PASSWORD:-dmmonitor_local}@postgres:5432/dmmonitor?sslmode=disable
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}

@@ -10,6 +10,6 @@ if (Test-Path -LiteralPath $dmPortableGo) {
     $dmGo = (Get-Command go -ErrorAction Stop).Source
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $dmRoot '.tmp') | Out-Null
-& $dmGo -C backend build -o ../.tmp/dmmonitor.exe ./cmd/server
+& $dmGo -C backend build -buildvcs=false -o ../.tmp/dmmonitor.exe ./cmd/server
 if ($LASTEXITCODE -ne 0) { throw 'Falha ao compilar a API.' }
 & (Join-Path $dmRoot '.tmp/dmmonitor.exe')

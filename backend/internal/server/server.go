@@ -35,7 +35,7 @@ func New(ctx context.Context, db *store.Store, config Config) (*Server, error) {
 		return nil, errors.New("PUBLIC_URL deve ser uma origem HTTP(S) sem caminho")
 	}
 	if config.Environment != "development" && config.Environment != "production" {
-		return nil, errors.New("APP_ENV deve ser development ou production")
+		return nil, errors.New("DMMONITOR_ENV deve ser development ou production")
 	}
 	if u.Scheme != "https" && (config.Environment != "development" || (u.Hostname() != "localhost" && u.Hostname() != "127.0.0.1" && u.Hostname() != "::1")) {
 		return nil, errors.New("PUBLIC_URL deve usar HTTPS fora do desenvolvimento local")

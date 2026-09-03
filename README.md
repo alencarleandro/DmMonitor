@@ -197,7 +197,7 @@ cp .env.example .env
 Configure o `.env`:
 
 ```env
-APP_ENV=development
+DMMONITOR_ENV=development
 PORT=8087
 PUBLIC_URL=http://127.0.0.1:5175
 DATABASE_URL=postgres://dmmonitor:senha@localhost:5432/dmmonitor?sslmode=disable
@@ -347,7 +347,7 @@ As próximas consultas desse acompanhante serão bloqueadas pela API.
 
 | Variável | Obrigatória | Descrição |
 | --- | --- | --- |
-| `APP_ENV` | Sim | `development` ou `production`. |
+| `DMMONITOR_ENV` | Sim | `development` ou `production`. O prefixo evita conflito com variáveis de outros projetos. |
 | `PORT` | Sim | Porta da API Go. Padrão: `8087`. |
 | `PUBLIC_URL` | Sim | Origem pública da interface, sem barra final. |
 | `DATABASE_URL` | Sim | Conexão PostgreSQL da aplicação. |
@@ -431,7 +431,7 @@ Antes de armazenar medições reais em produção, configure TLS no PostgreSQL, 
 ## Produção
 
 1. Compile o React e o Go ou use o `Dockerfile`.
-2. Configure `APP_ENV=production`.
+2. Configure `DMMONITOR_ENV=production`.
 3. Use um domínio HTTPS em `PUBLIC_URL`.
 4. Cadastre o callback desse domínio no Google.
 5. Armazene `DATABASE_URL`, `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` como segredos do ambiente.

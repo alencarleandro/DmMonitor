@@ -44,7 +44,7 @@ func run() error {
 		return errors.New("não foi possível conectar ou inicializar o PostgreSQL; confira DATABASE_URL e as permissões do banco")
 	}
 	defer db.DB.Close()
-	app, err := server.New(initCtx, db, server.Config{PublicURL: env("PUBLIC_URL", "http://127.0.0.1:5175"), Environment: env("APP_ENV", "development"), GoogleClientID: os.Getenv("GOOGLE_CLIENT_ID"), GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"), StaticDir: env("STATIC_DIR", "web/dist")})
+	app, err := server.New(initCtx, db, server.Config{PublicURL: env("PUBLIC_URL", "http://127.0.0.1:5175"), Environment: env("DMMONITOR_ENV", "development"), GoogleClientID: os.Getenv("GOOGLE_CLIENT_ID"), GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"), StaticDir: env("STATIC_DIR", "web/dist")})
 	if err != nil {
 		return err
 	}
