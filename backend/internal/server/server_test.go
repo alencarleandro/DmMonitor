@@ -60,7 +60,7 @@ func TestConfigRejectsUnsafeProduction(t *testing.T) {
 	for _, config := range []Config{
 		{PublicURL: "http://example.com", Environment: "production"},
 		{PublicURL: "https://example.com", Environment: "production"},
-		{PublicURL: "http://127.0.0.1:5175", Environment: "development", GoogleClientID: "incomplete"},
+		{PublicURL: "http://127.0.0.1:5175", Environment: "development", GoogleClientSecret: "incomplete"},
 		{PublicURL: "http://remote.example", Environment: "development"},
 		{PublicURL: "https://example.com/path", Environment: "development"},
 	} {

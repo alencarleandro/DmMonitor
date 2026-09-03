@@ -112,9 +112,9 @@ API Go + net/http
 
 ```text
 1. O visitante escolhe Usuário ou Acompanhante.
-2. O frontend abre /auth/google com o perfil escolhido.
-3. A API cria state, nonce e verificador PKCE temporários.
-4. O Google autentica a conta e retorna um código.
+2. A API cria um nonce temporário vinculado ao navegador.
+3. O botão Google Identity Services autentica a conta.
+4. O frontend envia o ID token e o perfil escolhido à API.
 5. A API valida o ID token e o e-mail verificado.
 6. Uma sessão local é criada e enviada em cookie HttpOnly.
 7. Cada requisição protegida valida novamente o perfil e a permissão.
@@ -231,22 +231,30 @@ As tabelas são criadas automaticamente no primeiro início da API usando `backe
 1. Acesse o [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
 2. Configure a tela de consentimento OAuth.
 3. Crie um **ID do cliente OAuth** do tipo **Aplicativo da Web**.
-4. Cadastre este URI de redirecionamento autorizado:
+4. Em **Origens JavaScript autorizadas**, cadastre a origem usada para abrir o app:
 
 ```text
-http://127.0.0.1:5175/auth/google/callback
+http://127.0.0.1:5175
 ```
 
-5. Adicione as credenciais ao `.env`:
+5. Adicione o Client ID ao `.env`. O botão **Google Identity Services** precisa apenas desse identificador, sem API key nem Client Secret:
 
 ```env
 GOOGLE_CLIENT_ID=seu-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=seu-segredo
+GOOGLE_CLIENT_SECRET=
 ```
 
 6. Se o aplicativo Google estiver em modo de teste, cadastre as contas permitidas como usuários de teste.
 
 Use exatamente a mesma origem de `PUBLIC_URL`. Para o Google, `localhost` e `127.0.0.1` são origens diferentes.
+
+Se usar `localhost`, cadastre `http://localhost` e `http://localhost:5175` e ajuste `PUBLIC_URL`. No Docker completo, use a origem da porta `8087`. Se acessar pelo ARSENAL em `https://arsenal.dev.br/...`, a origem é `https://arsenal.dev.br`, sem o caminho: ela deve estar autorizada no Google e configurada em `PUBLIC_URL`.
+
+É possível reutilizar um Client ID do tipo Web de outro projeto, desde que a origem do DM Monitor esteja autorizada nesse cliente. O nome apresentado na tela de consentimento será o configurado naquele projeto Google. Veja a [configuração oficial do Google Identity Services](https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid).
+
+Opcionalmente, ao preencher também `GOOGLE_CLIENT_SECRET`, o app usa o fluxo OAuth com redirecionamento. Nesse modo, cadastre `PUBLIC_URL` + `/auth/google/callback` nos **URIs de redirecionamento autorizados**.
+
+Se aparecer **origin_mismatch** ou **The given origin is not allowed**, confira a origem cadastrada no Console. Se a API responder **Origem da requisição não autorizada**, ajuste `PUBLIC_URL` para a origem exata aberta no navegador. Reinicie a API depois de alterar o `.env`.
 
 ### 5. Inicie o frontend
 
@@ -352,7 +360,7 @@ As próximas consultas desse acompanhante serão bloqueadas pela API.
 | `PUBLIC_URL` | Sim | Origem pública da interface, sem barra final. |
 | `DATABASE_URL` | Sim | Conexão PostgreSQL da aplicação. |
 | `GOOGLE_CLIENT_ID` | Em produção | ID do cliente OAuth do Google. |
-| `GOOGLE_CLIENT_SECRET` | Em produção | Segredo do cliente OAuth do Google. |
+| `GOOGLE_CLIENT_SECRET` | Não | Opcional: seleciona o fluxo OAuth com redirecionamento. Vazio usa Google Identity Services. |
 | `STATIC_DIR` | Sim | Diretório do build React servido pelo Go. |
 | `DOCKER_PUBLIC_URL` | No Compose | Origem usada ao executar a aplicação completa via Docker. |
 
@@ -362,8 +370,10 @@ As próximas consultas desse acompanhante serão bloqueadas pela API.
 | --- | --- | --- |
 | `GET` | `/healthz` | Verifica a conexão da API com o banco. |
 | `GET` | `/api/config` | Informa se o login Google está configurado. |
-| `GET` | `/auth/google?role=user\|companion` | Inicia o login Google. |
-| `GET` | `/auth/google/callback` | Processa o retorno OAuth. |
+| `POST` | `/api/auth/google/challenge` | Prepara um nonce vinculado ao navegador para o login. |
+| `POST` | `/api/auth/google` | Valida o ID token Google e cria a sessão do perfil escolhido. |
+| `GET` | `/auth/google?role=user\|companion` | Inicia o fluxo opcional com Client Secret. |
+| `GET` | `/auth/google/callback` | Processa o retorno desse fluxo OAuth. |
 | `GET` | `/api/me` | Retorna a conta autenticada. |
 | `POST` | `/api/logout` | Encerra a sessão atual. |
 | `GET` | `/api/measurements` | Lista medições autorizadas por data. |
@@ -433,8 +443,8 @@ Antes de armazenar medições reais em produção, configure TLS no PostgreSQL, 
 1. Compile o React e o Go ou use o `Dockerfile`.
 2. Configure `DMMONITOR_ENV=production`.
 3. Use um domínio HTTPS em `PUBLIC_URL`.
-4. Cadastre o callback desse domínio no Google.
-5. Armazene `DATABASE_URL`, `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` como segredos do ambiente.
+4. Cadastre esse domínio nas origens JavaScript autorizadas do cliente Google.
+5. Configure `DATABASE_URL` e `GOOGLE_CLIENT_ID` no ambiente. Proteja as credenciais do banco; o Client ID é público. `GOOGLE_CLIENT_SECRET` só é necessário no fluxo opcional por redirecionamento.
 6. Mantenha frontend e API na mesma origem atrás de um proxy HTTPS.
 
 <div align="center">

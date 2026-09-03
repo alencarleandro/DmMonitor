@@ -3,9 +3,11 @@ import type { FormEvent } from 'react'
 import { ArrowDownLeft, ArrowRight, CalendarDays, Check, CheckCheck, ChevronLeft, ChevronRight, Clock3, Copy, Droplet, HeartHandshake, LayoutDashboard, Link2, LogOut, Mail, Plus, RefreshCw, ShieldCheck, Trash2, Users, X } from 'lucide-react'
 import { api, contexts, localDate, localDateTime, sampleMeasurements, today } from './api'
 import type { Grant, Measurement, Patient, Role, User } from './api'
+import { GoogleSignIn } from './GoogleSignIn'
 
 type Session = { user: User; demo: boolean }
 type Toast = { text: string; error?: boolean }
+type GoogleConfig = { googleEnabled: boolean; googleClientId: string; googleMode: 'identity' | 'redirect' | 'disabled' }
 const dayLabel = (value: string) => new Date(`${value}T12:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })
 const firstName = (user: User) => user.name.split(' ')[0]
 
@@ -15,10 +17,10 @@ function GoogleIcon() { return <svg width="19" height="19" viewBox="0 0 24 24" a
 export default function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
-  const [googleEnabled, setGoogleEnabled] = useState(false)
+  const [googleConfig, setGoogleConfig] = useState<GoogleConfig>({ googleEnabled: false, googleClientId: '', googleMode: 'disabled' })
   const [toast, setToast] = useState<Toast | null>(null)
   useEffect(() => {
-    Promise.all([api<User>('/me').then(user => setSession({ user, demo: false })).catch(() => {}), api<{ googleEnabled: boolean }>('/config').then(c => setGoogleEnabled(c.googleEnabled)).catch(() => {})]).finally(() => setLoading(false))
+    Promise.all([api<User>('/me').then(user => setSession({ user, demo: false })).catch(() => {}), api<GoogleConfig>('/config').then(setGoogleConfig).catch(() => {})]).finally(() => setLoading(false))
     const expired = () => setSession(null)
     window.addEventListener('session-expired', expired)
     if (new URLSearchParams(location.search).has('auth_error')) {
@@ -32,15 +34,15 @@ export default function App() {
   async function logout() {
     try { if (!session?.demo) await api('/logout', { method: 'POST' }); setSession(null) } catch (e) { setToast({ text: (e as Error).message, error: true }) }
   }
-  return <>{loading ? <div className="boot"><Logo /><span>Preparando seu diário…</span></div> : session ? <Workspace key={`${session.user.id}-${session.user.role}`} session={session} notify={setToast} logout={logout} /> : <Login googleEnabled={googleEnabled} onDemo={demo} />}
+  return <>{loading ? <div className="boot"><Logo /><span>Preparando seu diário…</span></div> : session ? <Workspace key={`${session.user.id}-${session.user.role}`} session={session} notify={setToast} logout={logout} /> : <Login googleConfig={googleConfig} onLogin={user => setSession({ user, demo: false })} onDemo={demo} />}
     {toast && <div className={`toast ${toast.error ? 'toast-error' : ''}`} role={toast.error ? 'alert' : 'status'}>{toast.error ? <X size={18} /> : <CheckCheck size={18} />}<span>{toast.text}</span><button className="icon-button" aria-label="Fechar aviso" onClick={() => setToast(null)}><X size={16} /></button></div>}
   </>
 }
 
-function Login({ googleEnabled, onDemo }: { googleEnabled: boolean; onDemo: (role: Role) => void }) {
+function Login({ googleConfig, onLogin, onDemo }: { googleConfig: GoogleConfig; onLogin: (user: User) => void; onDemo: (role: Role) => void }) {
   const [role, setRole] = useState<Role>('user')
   return <main className="login-page"><section className="login-story"><Logo /><div className="story-main"><div className="eyebrow"><span /> UM CUIDADO, TODOS OS DIAS</div><h1>Seu dia a dia.<br />Seu cuidado.<br /><em>Mais perto.</em></h1><p>Um lugar simples para registrar sua glicemia e compartilhar cada passo com quem cuida de você.</p><div className="story-note"><HeartHandshake size={24} /><span>Para você e sua rede de cuidado.</span></div></div><span className="story-footer">Um registro de cada vez.</span></section><section className="login-form-section"><div className="login-form"><span className="small-kicker">BEM-VINDO AO DM MONITOR</span><h2>Vamos cuidar do seu dia?</h2><p>Escolha como você quer começar.</p><div className="role-options"><button className={`role-option ${role === 'user' ? 'selected' : ''}`} onClick={() => setRole('user')} aria-pressed={role === 'user'}><span className="role-icon"><Droplet size={23} /></span><strong>Quero registrar</strong><span>Meu diário de glicemia</span><span className="radio-dot">{role === 'user' && <Check size={12} />}</span></button><button className={`role-option ${role === 'companion' ? 'selected' : ''}`} onClick={() => setRole('companion')} aria-pressed={role === 'companion'}><span className="role-icon"><Users size={23} /></span><strong>Quero acompanhar</strong><span>O cuidado de outra pessoa</span><span className="radio-dot">{role === 'companion' && <Check size={12} />}</span></button></div>
-    {googleEnabled ? <a className="button google-button" href={`/auth/google?role=${role}`}><GoogleIcon />Continuar com o Google<ArrowRight size={17} /></a> : <><button className="button google-button" disabled><GoogleIcon />Continuar com o Google</button><p className="setup-note">O login ficará disponível após a configuração do Google no servidor.</p></>}
+    {googleConfig.googleMode === 'identity' ? <GoogleSignIn clientId={googleConfig.googleClientId} role={role} onLogin={onLogin} /> : googleConfig.googleEnabled ? <a className="button google-button" href={`/auth/google?role=${role}`}><GoogleIcon />Continuar com o Google<ArrowRight size={17} /></a> : <><button className="button google-button" disabled><GoogleIcon />Continuar com o Google</button><p className="setup-note">O login ficará disponível após a configuração do Google no servidor.</p></>}
     <p className="account-hint">No primeiro acesso, sua conta será criada com o perfil escolhido.</p><div className="login-divider"><span>conheça primeiro</span></div><button className="demo-button" onClick={() => onDemo(role)}>Explorar demonstração <ArrowRight size={17} /></button><p className="demo-hint">Dados fictícios. Nenhuma informação é salva.</p><div className="privacy-note"><ShieldCheck size={18} /><span>Você decide quem pode acompanhar suas medições.</span></div></div><span className="login-bottom">Feito para simplificar sua rotina.</span></section></main>
 }
 

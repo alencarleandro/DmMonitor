@@ -40,8 +40,8 @@ func New(ctx context.Context, db *store.Store, config Config) (*Server, error) {
 	if u.Scheme != "https" && (config.Environment != "development" || (u.Hostname() != "localhost" && u.Hostname() != "127.0.0.1" && u.Hostname() != "::1")) {
 		return nil, errors.New("PUBLIC_URL deve usar HTTPS fora do desenvolvimento local")
 	}
-	if (config.GoogleClientID == "") != (config.GoogleClientSecret == "") {
-		return nil, errors.New("configure GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET juntos")
+	if config.GoogleClientSecret != "" && config.GoogleClientID == "" {
+		return nil, errors.New("configure GOOGLE_CLIENT_ID ao usar GOOGLE_CLIENT_SECRET")
 	}
 	if config.Environment == "production" && config.GoogleClientID == "" {
 		return nil, errors.New("Google OAuth deve estar configurado em produção")
@@ -53,7 +53,9 @@ func New(ctx context.Context, db *store.Store, config Config) (*Server, error) {
 		if err != nil {
 			return nil, errors.New("não foi possível consultar o provedor Google")
 		}
-		s.oauth = &oauth2.Config{ClientID: config.GoogleClientID, ClientSecret: config.GoogleClientSecret, Endpoint: provider.Endpoint(), RedirectURL: config.PublicURL + "/auth/google/callback", Scopes: []string{oidc.ScopeOpenID, "email", "profile"}}
+		if config.GoogleClientSecret != "" {
+			s.oauth = &oauth2.Config{ClientID: config.GoogleClientID, ClientSecret: config.GoogleClientSecret, Endpoint: provider.Endpoint(), RedirectURL: config.PublicURL + "/auth/google/callback", Scopes: []string{oidc.ScopeOpenID, "email", "profile"}}
+		}
 		s.verifier = provider.Verifier(&oidc.Config{ClientID: config.GoogleClientID})
 	}
 	return s, nil
@@ -62,7 +64,14 @@ func New(ctx context.Context, db *store.Store, config Config) (*Server, error) {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
-		respond(w, 200, map[string]bool{"googleEnabled": s.oauth != nil})
+		mode := "disabled"
+		if s.verifier != nil {
+			mode = "identity"
+		}
+		if s.oauth != nil {
+			mode = "redirect"
+		}
+		respond(w, 200, map[string]any{"googleEnabled": s.verifier != nil, "googleClientId": s.config.GoogleClientID, "googleMode": mode})
 	})
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := s.store.DB.Ping(r.Context()); err != nil {
@@ -73,6 +82,8 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("GET /auth/google", s.googleStart)
 	mux.HandleFunc("GET /auth/google/callback", s.googleCallback)
+	mux.HandleFunc("POST /api/auth/google/challenge", s.googleChallenge)
+	mux.HandleFunc("POST /api/auth/google", s.googleIdentityLogin)
 	mux.Handle("GET /api/me", s.auth("", func(w http.ResponseWriter, r *http.Request) { respond(w, 200, currentUser(r)) }))
 	mux.Handle("POST /api/logout", s.auth("", s.logout))
 	mux.Handle("GET /api/measurements", s.auth("", s.listMeasurements))
@@ -96,10 +107,14 @@ func (s *Server) Handler() http.Handler {
 	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		if strings.HasPrefix(s.config.PublicURL, "http://") {
+			w.Header().Set("Referrer-Policy", "no-referrer-when-downgrade")
+		}
+		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin-allow-popups")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
 		if strings.HasPrefix(s.config.PublicURL, "https://") {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
 		}
