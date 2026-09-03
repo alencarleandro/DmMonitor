@@ -270,6 +270,12 @@ Em outro terminal no Windows:
 .\scripts\start-api.ps1
 ```
 
+Se o ARSENAL usa `dmmonitor-arsenal.exe`, configure o comando de inicialização abaixo, com a raiz do repositório como diretório de trabalho. Ele recompila esse executável antes de iniciar, evitando que uma versão antiga continue sendo usada após atualizar o código:
+
+```powershell
+powershell -NoProfile -File .\scripts\start-api.ps1 -Arsenal
+```
+
 No Linux ou macOS:
 
 ```bash

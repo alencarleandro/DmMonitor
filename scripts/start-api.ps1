@@ -1,3 +1,5 @@
+param([switch]$Arsenal)
+
 $ErrorActionPreference = 'Stop'
 $dmRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $dmRoot
@@ -10,6 +12,7 @@ if (Test-Path -LiteralPath $dmPortableGo) {
     $dmGo = (Get-Command go -ErrorAction Stop).Source
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $dmRoot '.tmp') | Out-Null
-& $dmGo -C backend build -buildvcs=false -o ../.tmp/dmmonitor.exe ./cmd/server
+$dmExecutable = if ($Arsenal) { 'dmmonitor-arsenal.exe' } else { 'dmmonitor.exe' }
+& $dmGo -C backend build -buildvcs=false -o "../.tmp/$dmExecutable" ./cmd/server
 if ($LASTEXITCODE -ne 0) { throw 'Falha ao compilar a API.' }
-& (Join-Path $dmRoot '.tmp/dmmonitor.exe')
+& (Join-Path $dmRoot ".tmp/$dmExecutable")
