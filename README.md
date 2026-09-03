@@ -313,9 +313,8 @@ Abra `http://127.0.0.1:8087`. Nesse modo, a API Go também entrega o React compi
 2. Clique em **Continuar com o Google**.
 3. Na página **Minhas medições**, clique em **Lançar medição**.
 4. Informe o valor da glicemia.
-5. Escolha a data, o horário e o momento da medição.
-6. Adicione uma observação, se desejar.
-7. Clique em **Salvar medição**.
+5. Digite somente o valor inteiro da glicemia em mg/dL.
+6. Clique em **Salvar medição**. A API registra automaticamente a data e o horário do lançamento.
 
 A tabela é atualizada após o cadastro. Use as setas ou o calendário para consultar outro dia. Para remover um registro, clique na lixeira da linha e confirme.
 

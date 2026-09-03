@@ -166,7 +166,7 @@ func TestPostgresPermissionsAndSharing(t *testing.T) {
 		}
 		return w
 	}
-	payload := map[string]any{"value": 113, "measuredAt": "2026-01-15T03:15:00Z", "context": "fasting", "notes": "fictional integration fixture"}
+	payload := map[string]any{"value": 113}
 	measurement := store.Measurement{}
 	t.Run("login required and owner write", func(t *testing.T) {
 		request("GET", "/api/measurements", "", nil, 401)
@@ -174,10 +174,14 @@ func TestPostgresPermissionsAndSharing(t *testing.T) {
 		if err := json.Unmarshal(w.Body.Bytes(), &measurement); err != nil {
 			t.Fatal(err)
 		}
+		if measurement.Context != "other" || measurement.Notes != "" || time.Since(measurement.MeasuredAt) > time.Minute {
+			t.Fatalf("server did not complete the measurement: %+v", measurement)
+		}
 		request("GET", "/api/measurements?patientId="+other.ID, ownerToken, nil, 403)
 		request("DELETE", "/api/measurements/"+measurement.ID, otherToken, nil, 404)
 	})
-	path := "/api/measurements?date=2026-01-15&tz=America%2FSao_Paulo&patientId=" + owner.ID
+	location, _ := time.LoadLocation("America/Sao_Paulo")
+	path := "/api/measurements?date=" + measurement.MeasuredAt.In(location).Format(time.DateOnly) + "&tz=America%2FSao_Paulo&patientId=" + owner.ID
 	t.Run("ungranted companion and csrf rejected", func(t *testing.T) {
 		request("GET", path, companionToken, nil, 403)
 		request("POST", "/api/measurements", companionToken, payload, 403)
@@ -244,7 +248,8 @@ func TestPostgresPermissionsAndSharing(t *testing.T) {
 		request("POST", "/api/invites/redeem", outsiderToken, map[string]string{"code": "invalid"}, 429)
 	})
 	t.Run("date boundaries and validation", func(t *testing.T) {
-		w := request("GET", "/api/measurements?date=2026-01-14&tz=America%2FSao_Paulo", ownerToken, nil, 200)
+		previousDay := measurement.MeasuredAt.In(location).AddDate(0, 0, -1).Format(time.DateOnly)
+		w := request("GET", "/api/measurements?date="+previousDay+"&tz=America%2FSao_Paulo", ownerToken, nil, 200)
 		if strings.TrimSpace(w.Body.String()) != "[]" {
 			t.Fatal("measurement leaked into previous day")
 		}

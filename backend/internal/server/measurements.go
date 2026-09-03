@@ -3,7 +3,6 @@ package server
 import (
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 	_ "time/tzdata"
 	"unicode/utf8"
@@ -89,15 +88,12 @@ func (s *Server) listMeasurements(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) createMeasurement(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Value      int       `json:"value"`
-		MeasuredAt time.Time `json:"measuredAt"`
-		Context    string    `json:"context"`
-		Notes      string    `json:"notes"`
+		Value int `json:"value"`
 	}
 	if !decode(w, r, &input) {
 		return
 	}
-	m := store.Measurement{ID: store.ID(), Value: input.Value, MeasuredAt: input.MeasuredAt, Context: input.Context, Notes: strings.TrimSpace(input.Notes)}
+	m := store.Measurement{ID: store.ID(), Value: input.Value, MeasuredAt: time.Now().UTC(), Context: "other", Notes: ""}
 	if message := validateMeasurement(m, time.Now()); message != "" {
 		fail(w, 400, message)
 		return
