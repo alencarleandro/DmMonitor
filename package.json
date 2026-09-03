@@ -1,0 +1,10 @@
+{
+  "name": "dmmonitor",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix web run dev",
+    "build": "npm --prefix web run build",
+    "install:web": "npm --prefix web ci"
+  }
+}

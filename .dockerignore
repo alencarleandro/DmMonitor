@@ -1,0 +1,9 @@
+.git
+.env
+.env.*
+.tools
+.tmp
+**/node_modules
+**/dist
+**/*.log
+**/*.tsbuildinfo
