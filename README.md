@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/dmmonitor-stevia.svg" width="130" alt="Logo DM Monitor com uma folha de estévia" />
+  <img src="web/public/favicon.svg" width="130" alt="Logo DM Monitor com uma gota e uma curva de glicemia" />
 
   <h1>DM Monitor</h1>
 

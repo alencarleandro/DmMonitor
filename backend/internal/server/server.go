@@ -87,7 +87,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/me", s.auth("", func(w http.ResponseWriter, r *http.Request) { respond(w, 200, currentUser(r)) }))
 	mux.Handle("POST /api/logout", s.auth("", s.logout))
 	mux.Handle("GET /api/measurements", s.auth("", s.listMeasurements))
-	mux.Handle("GET /api/measurements/first-date", s.auth("user", s.firstMeasurementDate))
+	mux.Handle("GET /api/measurements/first-date", s.auth("", s.firstMeasurementDate))
 	mux.Handle("POST /api/measurements", s.auth("user", s.createMeasurement))
 	mux.Handle("DELETE /api/measurements/{id}", s.auth("user", s.deleteMeasurement))
 	mux.Handle("GET /api/share-link", s.auth("user", s.getShareLink))

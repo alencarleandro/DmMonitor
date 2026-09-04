@@ -115,8 +115,29 @@ func (s *Server) listMeasurements(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) firstMeasurementDate(w http.ResponseWriter, r *http.Request) {
+	u := currentUser(r)
+	query := r.URL.Query()
+	owner := query.Get("patientId")
+	if owner == "" {
+		owner = u.ID
+	}
+	allowed, err := s.store.CanRead(r.Context(), u, owner)
+	if err != nil {
+		internal(w, err)
+		return
+	}
+	if !allowed {
+		fail(w, 403, "Você não tem acesso a este diário.")
+		return
+	}
+	start, _, err := dateRange("", query.Get("tz"))
+	if err != nil {
+		fail(w, 400, err.Error())
+		return
+	}
 	var measuredAt time.Time
-	err := s.store.DB.QueryRow(r.Context(), "SELECT measured_at FROM measurements WHERE owner_id=$1 ORDER BY measured_at ASC LIMIT 1", currentUser(r).ID).Scan(&measuredAt)
+	err = s.store.DB.QueryRow(r.Context(), `SELECT measured_at FROM measurements WHERE owner_id=$1
+ AND (owner_id=$2 OR EXISTS(SELECT 1 FROM access_grants WHERE owner_id=$1 AND companion_id=$2)) ORDER BY measured_at ASC LIMIT 1`, owner, u.ID).Scan(&measuredAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			respond(w, 200, map[string]string{"date": ""})
@@ -125,11 +146,7 @@ func (s *Server) firstMeasurementDate(w http.ResponseWriter, r *http.Request) {
 		internal(w, err)
 		return
 	}
-	zone := r.URL.Query().Get("tz")
-	if zone == "" { zone = "America/Sao_Paulo" }
-	location, err := time.LoadLocation(zone)
-	if err != nil { fail(w, 400, "Fuso horário inválido."); return }
-	respond(w, 200, map[string]string{"date": measuredAt.In(location).Format(time.DateOnly)})
+	respond(w, 200, map[string]string{"date": measuredAt.In(start.Location()).Format(time.DateOnly)})
 }
 func (s *Server) createMeasurement(w http.ResponseWriter, r *http.Request) {
 	var input struct {

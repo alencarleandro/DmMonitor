@@ -208,6 +208,7 @@ func TestPostgresPermissionsAndSharing(t *testing.T) {
 	path := "/api/measurements?date=" + measurement.MeasuredAt.In(location).Format(time.DateOnly) + "&tz=America%2FSao_Paulo&patientId=" + owner.ID
 	t.Run("ungranted companion and csrf rejected", func(t *testing.T) {
 		request("GET", path, companionToken, nil, 403)
+		request("GET", "/api/measurements/first-date?patientId="+owner.ID, companionToken, nil, 403)
 		request("POST", "/api/measurements", companionToken, payload, 403)
 		request("POST", "/api/access", companionToken, map[string]string{"email": "x@example.com"}, 403)
 		r := httptest.NewRequest("POST", "/api/measurements", strings.NewReader(`{}`))
@@ -228,12 +229,21 @@ func TestPostgresPermissionsAndSharing(t *testing.T) {
 		if len(rows) != 1 || rows[0].ID != measurement.ID {
 			t.Fatalf("wrong rows: %v", rows)
 		}
+		w = request("GET", "/api/measurements/first-date?patientId="+owner.ID+"&tz=America%2FSao_Paulo", companionToken, nil, 200)
+		var firstDate struct {
+			Date string `json:"date"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &firstDate); err != nil || firstDate.Date != measurement.MeasuredAt.In(location).Format(time.DateOnly) {
+			t.Fatalf("wrong companion first date: %s, %v", w.Body.String(), err)
+		}
 		request("GET", path, outsiderToken, nil, 403)
+		request("GET", "/api/measurements/first-date?patientId="+owner.ID, outsiderToken, nil, 403)
 		request("DELETE", "/api/measurements/"+measurement.ID, companionToken, nil, 403)
 		request("POST", "/api/access", ownerToken, map[string]string{"email": companion.Email}, 409)
 		request("DELETE", "/api/access/"+grant.ID, otherToken, nil, 404)
 		request("DELETE", "/api/access/"+grant.ID, ownerToken, nil, 204)
 		request("GET", path, companionToken, nil, 403)
+		request("GET", "/api/measurements/first-date?patientId="+owner.ID, companionToken, nil, 403)
 	})
 	t.Run("pending email linked only on verified login", func(t *testing.T) {
 		request("POST", "/api/access", ownerToken, map[string]string{"email": "future@example.com"}, 201)
@@ -291,6 +301,58 @@ func TestPostgresPermissionsAndSharing(t *testing.T) {
 		if err != nil || u.Role != "user" {
 			t.Fatal("login changed persisted role")
 		}
+	})
+	t.Run("first date timezone and shared period metadata", func(t *testing.T) {
+		request("GET", "/api/measurements/first-date", "", nil, 401)
+		request("GET", "/api/measurements/first-date?patientId="+other.ID, ownerToken, nil, 403)
+		request("GET", "/api/measurements/first-date?tz=invalid", otherToken, nil, 400)
+		assertFirstDate := func(token, zone, expected string) {
+			t.Helper()
+			w := request("GET", "/api/measurements/first-date?tz="+url.QueryEscape(zone), token, nil, 200)
+			var result struct {
+				Date string `json:"date"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil || result.Date != expected {
+				t.Fatalf("first date = %s, want %q: %v", w.Body.String(), expected, err)
+			}
+		}
+		assertFirstDate(otherToken, "UTC", "")
+		oldAt := time.Date(2020, time.January, 2, 1, 30, 0, 0, time.UTC)
+		w := request("POST", "/api/measurements", ownerToken, map[string]any{"value": 101, "measuredAt": oldAt.Format(time.RFC3339)}, 201)
+		var oldMeasurement store.Measurement
+		if err := json.Unmarshal(w.Body.Bytes(), &oldMeasurement); err != nil {
+			t.Fatal(err)
+		}
+		assertFirstDate(ownerToken, "UTC", "2020-01-02")
+		assertFirstDate(ownerToken, "America/Sao_Paulo", "2020-01-01")
+		assertFirstDate(ownerToken, "", "2020-01-01")
+		sharedPath := func(token string) string {
+			t.Helper()
+			w := request("POST", "/api/share-link", token, nil, 201)
+			var link struct {
+				Token string `json:"token"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &link); err != nil {
+				t.Fatal(err)
+			}
+			return "/api/shared/" + link.Token + "/measurements?from=2021-01-01&to=2021-01-02&tz=America%2FSao_Paulo"
+		}
+		assertSharedDate := func(path, expected string) {
+			t.Helper()
+			w := request("GET", path, "", nil, 200)
+			var result struct {
+				FirstMeasurementDate string              `json:"firstMeasurementDate"`
+				Measurements         []store.Measurement `json:"measurements"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil || result.FirstMeasurementDate != expected || len(result.Measurements) != 0 {
+				t.Fatalf("wrong shared metadata for empty period: %s, %v", w.Body.String(), err)
+			}
+		}
+		assertSharedDate(sharedPath(ownerToken), "2020-01-01")
+		assertSharedDate(sharedPath(otherToken), "")
+		request("GET", "/api/shared/"+strings.Repeat("x", 43)+"/measurements", "", nil, 404)
+		request("DELETE", "/api/measurements/"+oldMeasurement.ID, ownerToken, nil, 204)
+		assertFirstDate(ownerToken, "UTC", measurement.MeasuredAt.UTC().Format(time.DateOnly))
 	})
 	t.Run("owner delete and logout revoke session", func(t *testing.T) {
 		request("DELETE", "/api/measurements/"+measurement.ID, ownerToken, nil, 204)

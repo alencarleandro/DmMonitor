@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/alencarleandro/DmMonitor/backend/internal/store"
 	"github.com/jackc/pgx/v5"
@@ -55,6 +56,16 @@ func (s *Server) listSharedMeasurements(w http.ResponseWriter, r *http.Request) 
 		fail(w, 400, err.Error())
 		return
 	}
+	firstDate := ""
+	var firstMeasuredAt time.Time
+	err = s.store.DB.QueryRow(r.Context(), "SELECT measured_at FROM measurements WHERE owner_id=$1 ORDER BY measured_at ASC LIMIT 1", ownerID).Scan(&firstMeasuredAt)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		internal(w, err)
+		return
+	}
+	if err == nil {
+		firstDate = firstMeasuredAt.In(start.Location()).Format(time.DateOnly)
+	}
 	rows, err := s.store.DB.Query(r.Context(), `SELECT id,value,measured_at,context,notes FROM measurements
  WHERE owner_id=$1 AND measured_at >= $2 AND measured_at < $3 ORDER BY measured_at DESC,created_at DESC`, ownerID, start, end)
 	if err != nil {
@@ -75,5 +86,5 @@ func (s *Server) listSharedMeasurements(w http.ResponseWriter, r *http.Request) 
 		internal(w, err)
 		return
 	}
-	respond(w, 200, map[string]any{"ownerName": ownerName, "measurements": measurements})
+	respond(w, 200, map[string]any{"ownerName": ownerName, "measurements": measurements, "firstMeasurementDate": firstDate})
 }
