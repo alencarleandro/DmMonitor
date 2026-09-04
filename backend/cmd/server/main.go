@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -28,7 +29,7 @@ func main() {
 	}
 }
 func run() error {
-	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := godotenv.Load(env("DMMONITOR_ENV_FILE", ".env")); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return errors.New("não foi possível ler o arquivo .env")
 	}
 	url := os.Getenv("DATABASE_URL")
@@ -48,10 +49,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	httpServer := &http.Server{Addr: ":" + env("PORT", "8087"), Handler: app.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 20 * time.Second, WriteTimeout: 25 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 * 1024}
+	host := env("SERVER_ADDRESS", "127.0.0.1")
+	port := env("PORT", "8087")
+	httpServer := &http.Server{Addr: net.JoinHostPort(host, port), Handler: app.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 20 * time.Second, WriteTimeout: 25 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 * 1024}
 	done := make(chan error, 1)
 	go func() {
-		slog.Info("DM Monitor iniciado", "port", env("PORT", "8087"))
+		slog.Info("DM Monitor iniciado", "address", httpServer.Addr)
 		done <- httpServer.ListenAndServe()
 	}()
 	go func() {

@@ -7,8 +7,10 @@ export const contexts: Record<string, string> = { fasting: 'Em jejum', before_me
 export const today = () => localDate(new Date())
 export function localDate(date: Date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` }
 export function localDateTime() { const d = new Date(); return `${localDate(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` }
+const APP_BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`/api${path}`, { ...options, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'DMMonitor', ...options.headers } })
+  const response = await fetch(`${APP_BASE}/api${path}`, { ...options, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'DMMonitor', ...options.headers } })
   if (!response.ok) {
     const body = await response.json().catch(() => ({}))
     if (response.status === 401) window.dispatchEvent(new Event('session-expired'))

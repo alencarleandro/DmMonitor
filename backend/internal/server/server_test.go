@@ -35,6 +35,20 @@ func TestDayRangeHonorsTimezoneAndDST(t *testing.T) {
 		t.Fatal("accepted invalid timezone")
 	}
 }
+
+func TestRequestedMeasurementRange(t *testing.T) {
+	start, end, err := requestedMeasurementRange("", "2026-09-01", "2026-09-03", "America/Sao_Paulo")
+	if err != nil || end.Sub(start) != 72*time.Hour {
+		t.Fatalf("period range = %v, %v, %v", start, end, err)
+	}
+	if _, _, err = requestedMeasurementRange("", "2026-09-03", "", "UTC"); err == nil {
+		t.Fatal("accepted incomplete period")
+	}
+	if _, _, err = requestedMeasurementRange("", "2026-09-03", "2027-09-04", "UTC"); err == nil {
+		t.Fatal("accepted period longer than one year")
+	}
+}
+
 func TestMeasurementValidation(t *testing.T) {
 	now := time.Now()
 	valid := store.Measurement{Value: 100, MeasuredAt: now.Add(-time.Hour), Context: "fasting"}
@@ -43,7 +57,7 @@ func TestMeasurementValidation(t *testing.T) {
 	}
 	for name, change := range map[string]func(*store.Measurement){
 		"zero": func(m *store.Measurement) { m.Value = 0 }, "negative": func(m *store.Measurement) { m.Value = -10 },
-		"too large": func(m *store.Measurement) { m.Value = 1501 }, "future": func(m *store.Measurement) { m.MeasuredAt = now.Add(time.Minute) },
+		"too large": func(m *store.Measurement) { m.Value = 1501 }, "future": func(m *store.Measurement) { m.MeasuredAt = now.Add(2 * time.Minute) },
 		"missing time": func(m *store.Measurement) { m.MeasuredAt = time.Time{} }, "unknown context": func(m *store.Measurement) { m.Context = "invalid" },
 		"long note": func(m *store.Measurement) { m.Notes = strings.Repeat("á", 1001) },
 	} {
@@ -177,6 +191,16 @@ func TestPostgresPermissionsAndSharing(t *testing.T) {
 		if measurement.Context != "other" || measurement.Notes != "" || time.Since(measurement.MeasuredAt) > time.Minute {
 			t.Fatalf("server did not complete the measurement: %+v", measurement)
 		}
+		chosenAt := time.Now().Add(-2 * time.Hour).UTC().Truncate(time.Second)
+		customResponse := request("POST", "/api/measurements", ownerToken, map[string]any{"value": 121, "measuredAt": chosenAt.Format(time.RFC3339)}, 201)
+		var custom store.Measurement
+		if err := json.Unmarshal(customResponse.Body.Bytes(), &custom); err != nil {
+			t.Fatal(err)
+		}
+		if !custom.MeasuredAt.Equal(chosenAt) {
+			t.Fatalf("custom measurement time = %v, want %v", custom.MeasuredAt, chosenAt)
+		}
+		request("DELETE", "/api/measurements/"+custom.ID, ownerToken, nil, 204)
 		request("GET", "/api/measurements?patientId="+other.ID, ownerToken, nil, 403)
 		request("DELETE", "/api/measurements/"+measurement.ID, otherToken, nil, 404)
 	})

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/alencarleandro/DmMonitor/backend/internal/store"
+	"github.com/jackc/pgx/v5"
 )
 
 func dateRange(date, zone string) (time.Time, time.Time, error) {
@@ -27,11 +29,35 @@ func dateRange(date, zone string) (time.Time, time.Time, error) {
 	}
 	return start, start.AddDate(0, 0, 1), nil
 }
+
+func requestedMeasurementRange(date, from, to, zone string) (time.Time, time.Time, error) {
+	if from == "" && to == "" {
+		return dateRange(date, zone)
+	}
+	if date != "" || from == "" || to == "" {
+		return time.Time{}, time.Time{}, fmt.Errorf("Informe uma data ou um período completo.")
+	}
+	start, _, err := dateRange(from, zone)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	_, end, err := dateRange(to, zone)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	if !end.After(start) || end.After(start.AddDate(1, 0, 1)) {
+		return time.Time{}, time.Time{}, fmt.Errorf("Escolha um período válido de até um ano.")
+	}
+	return start, end, nil
+}
+
 func validateMeasurement(m store.Measurement, now time.Time) string {
 	if m.Value < 1 || m.Value > 1500 {
 		return "Informe um valor inteiro entre 1 e 1500 mg/dL."
 	}
-	if m.MeasuredAt.IsZero() || m.MeasuredAt.Before(time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)) || m.MeasuredAt.After(now) {
+	// The server sets this timestamp. Allow a brief clock adjustment so a
+	// measurement created immediately before an OS time sync is not rejected.
+	if m.MeasuredAt.IsZero() || m.MeasuredAt.Before(time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)) || m.MeasuredAt.After(now.Add(time.Minute)) {
 		return "Informe uma data válida, a partir de 2000, que não esteja no futuro."
 	}
 	switch m.Context {
@@ -59,7 +85,8 @@ func (s *Server) listMeasurements(w http.ResponseWriter, r *http.Request) {
 		fail(w, 403, "Você não tem acesso a este diário.")
 		return
 	}
-	start, end, err := dateRange(r.URL.Query().Get("date"), r.URL.Query().Get("tz"))
+	query := r.URL.Query()
+	start, end, err := requestedMeasurementRange(query.Get("date"), query.Get("from"), query.Get("to"), query.Get("tz"))
 	if err != nil {
 		fail(w, 400, err.Error())
 		return
@@ -86,15 +113,39 @@ func (s *Server) listMeasurements(w http.ResponseWriter, r *http.Request) {
 	}
 	respond(w, 200, result)
 }
+
+func (s *Server) firstMeasurementDate(w http.ResponseWriter, r *http.Request) {
+	var measuredAt time.Time
+	err := s.store.DB.QueryRow(r.Context(), "SELECT measured_at FROM measurements WHERE owner_id=$1 ORDER BY measured_at ASC LIMIT 1", currentUser(r).ID).Scan(&measuredAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			respond(w, 200, map[string]string{"date": ""})
+			return
+		}
+		internal(w, err)
+		return
+	}
+	zone := r.URL.Query().Get("tz")
+	if zone == "" { zone = "America/Sao_Paulo" }
+	location, err := time.LoadLocation(zone)
+	if err != nil { fail(w, 400, "Fuso horário inválido."); return }
+	respond(w, 200, map[string]string{"date": measuredAt.In(location).Format(time.DateOnly)})
+}
 func (s *Server) createMeasurement(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Value int `json:"value"`
+		Value      int        `json:"value"`
+		MeasuredAt *time.Time `json:"measuredAt"`
 	}
 	if !decode(w, r, &input) {
 		return
 	}
-	m := store.Measurement{ID: store.ID(), Value: input.Value, MeasuredAt: time.Now().UTC(), Context: "other", Notes: ""}
-	if message := validateMeasurement(m, time.Now()); message != "" {
+	now := time.Now()
+	measuredAt := now.UTC()
+	if input.MeasuredAt != nil {
+		measuredAt = input.MeasuredAt.UTC()
+	}
+	m := store.Measurement{ID: store.ID(), Value: input.Value, MeasuredAt: measuredAt, Context: "other", Notes: ""}
+	if message := validateMeasurement(m, now); message != "" {
 		fail(w, 400, message)
 		return
 	}

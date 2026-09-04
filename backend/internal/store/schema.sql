@@ -31,6 +31,11 @@ CREATE TABLE IF NOT EXISTS invites (
   code_hash text UNIQUE NOT NULL,
   expires_at timestamptz NOT NULL
 );
+CREATE TABLE IF NOT EXISTS share_links (
+  owner_id text PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  token text UNIQUE NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS sessions (
   token_hash text PRIMARY KEY,
   user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
